@@ -65,6 +65,12 @@ def get_video_info(url: str) -> dict:
         raise HTTPException(status_code=400, detail=f"Failed to get video info: {str(e)}")
 
 
+def _download_with_ytdlp(ydl_opts, url):
+    """Download a video with yt-dlp in a separate thread."""
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        return {'info': info, 'ydl': ydl}
+
 async def download_video(download_id: str, url: str, format_id: str):
     """Download a video asynchronously and update its status."""
     download_path = downloads_dir / download_id
@@ -91,35 +97,53 @@ async def download_video(download_id: str, url: str, format_id: str):
             download_tasks[download_id].status = "processing"
             download_tasks[download_id].progress = 100
     
+    # For special format selectors like 'best' or 'bestvideo+bestaudio'
+    # we need to ensure the format string is correct
+    format_string = format_id
+    
+    # If it's bestvideo+bestaudio, ensure we use the correct format string
+    # with the proper merge output format
+    if format_id == 'bestvideo+bestaudio':
+        format_string = 'bestvideo+bestaudio/best'
+    
     ydl_opts = {
-        'format': format_id,
+        'format': format_string,
         'outtmpl': str(download_path / '%(title)s.%(ext)s'),
         'progress_hooks': [progress_hook],
+        'merge_output_format': 'mp4',  # Force merge to mp4 for compatibility
     }
     
+    # Run the CPU-intensive download operation in a separate thread pool
+    # to prevent blocking the asyncio event loop
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            
-            # Get the downloaded file path
-            if 'entries' in info:  # It's a playlist
-                file_path = ydl.prepare_filename(info['entries'][0])
-            else:  # It's a single video
-                file_path = ydl.prepare_filename(info)
-            
-            # Update extension if it was converted
-            if os.path.exists(file_path):
-                file_path = file_path
-            else:
-                # Try to find the file with a different extension
-                base_path = os.path.splitext(file_path)[0]
-                potential_files = list(download_path.glob(f"{os.path.basename(base_path)}.*"))
-                if potential_files:
-                    file_path = str(potential_files[0])
-            
-            download_tasks[download_id].status = "completed"
-            download_tasks[download_id].file_path = file_path
-            
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None, 
+            lambda: _download_with_ytdlp(ydl_opts, url)
+        )
+        
+        info = result['info']
+        ydl = result['ydl']
+        
+        # Get the downloaded file path
+        if 'entries' in info:  # It's a playlist
+            file_path = ydl.prepare_filename(info['entries'][0])
+        else:  # It's a single video
+            file_path = ydl.prepare_filename(info)
+        
+        # Update extension if it was converted
+        if os.path.exists(file_path):
+            file_path = file_path
+        else:
+            # Try to find the file with a different extension
+            base_path = os.path.splitext(file_path)[0]
+            potential_files = list(download_path.glob(f"{os.path.basename(base_path)}.*"))
+            if potential_files:
+                file_path = str(potential_files[0])
+        
+        download_tasks[download_id].status = "completed"
+        download_tasks[download_id].file_path = file_path
+        
     except Exception as e:
         download_tasks[download_id].status = "failed"
         download_tasks[download_id].error = str(e)
@@ -139,7 +163,28 @@ async def get_info(request: DownloadRequest):
     
     info = get_video_info(request.url)
     
-    # Filter formats for better presentation
+    # Also include best available formats from format selector
+    best_formats = []
+    
+    # Add best format (highest resolution with audio and video)
+    best_formats.append({
+        'format_id': 'best',
+        'resolution': 'Best Quality',
+        'ext': 'mp4',
+        'filesize': 0,
+        'format_note': 'Best quality available (auto-selected)'
+    })
+    
+    # Add best video + best audio 
+    best_formats.append({
+        'format_id': 'bestvideo+bestaudio',
+        'resolution': 'Highest Resolution',
+        'ext': 'mp4',
+        'filesize': 0,
+        'format_note': 'Highest resolution available'
+    })
+    
+    # Filter specific formats for better presentation
     formats = []
     seen_resolution = set()
     
@@ -148,16 +193,18 @@ async def get_info(request: DownloadRequest):
             resolution = f.get('resolution', 'unknown')
             ext = f.get('ext', 'unknown')
             format_id = f.get('format_id', '')
+            height = f.get('height', 0)
             
             format_key = f"{resolution}_{ext}"
-            if format_key not in seen_resolution and 'audio only' not in resolution:
+            if format_key not in seen_resolution and 'audio only' not in resolution and height > 0:
                 seen_resolution.add(format_key)
                 formats.append({
                     'format_id': format_id,
                     'resolution': resolution,
                     'ext': ext,
                     'filesize': f.get('filesize', 0),
-                    'format_note': f.get('format_note', '')
+                    'format_note': f.get('format_note', ''),
+                    'height': height  # Store height for sorting
                 })
     
     # Also add audio-only formats
@@ -180,10 +227,21 @@ async def get_info(request: DownloadRequest):
     
     download_id = str(uuid.uuid4())
     
+    # Sort by height (resolution) in descending order
+    sorted_formats = sorted(formats, key=lambda x: x.get('height', 0), reverse=True)
+    
+    # Remove height field from result as it's not needed in the frontend
+    for fmt in sorted_formats:
+        if 'height' in fmt:
+            del fmt['height']
+    
+    # Combine formats with best formats first, then sorted regular formats, then audio
+    all_formats = best_formats + sorted_formats + audio_formats
+    
     return DownloadResponse(
         download_id=download_id,
         title=info.get('title', 'Unknown Title'),
-        formats=sorted(formats, key=lambda x: x.get('filesize', 0) if x.get('filesize') else 0, reverse=True) + audio_formats
+        formats=all_formats
     )
 
 
