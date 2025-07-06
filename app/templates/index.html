@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TubeScribe - YouTube Video Downloader</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fab fa-youtube"></i> TubeScribe</h1>
+            <p>Download YouTube videos easily and quickly</p>
+        </header>
+
+        <main>
+            <div class="card">
+                <div class="form-container">
+                    <div class="input-group">
+                        <input type="text" id="youtube-url" placeholder="Enter YouTube URL" class="url-input">
+                        <button id="fetch-info-btn" class="btn primary-btn">Get Video Info</button>
+                    </div>
+                    <div id="error-container" class="error"></div>
+                </div>
+
+                <div id="video-info" class="video-info hidden">
+                    <div class="video-details">
+                        <h2 id="video-title"></h2>
+                    </div>
+                    
+                    <div class="format-selection">
+                        <h3>Select Format</h3>
+                        <div id="formats-container" class="formats-grid"></div>
+                    </div>
+                    
+                    <button id="download-btn" class="btn primary-btn download-btn">
+                        <i class="fas fa-download"></i> Download
+                    </button>
+                </div>
+
+                <div id="download-progress" class="download-progress hidden">
+                    <h3>Downloading...</h3>
+                    <div class="progress-container">
+                        <div id="progress-bar" class="progress-bar"></div>
+                    </div>
+                    <p id="progress-text">0%</p>
+                    <p id="download-status">Initializing download...</p>
+                    
+                    <div id="download-complete" class="download-complete hidden">
+                        <button id="download-file-btn" class="btn success-btn">
+                            <i class="fas fa-file-download"></i> Save to Device
+                        </button>
+                        <button id="new-download-btn" class="btn secondary-btn">
+                            <i class="fas fa-plus"></i> New Download
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 TubeScribe. This tool is for personal use only. Please respect copyright laws.</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', path='/js/script.js') }}"></script>
+</body>
+</html>
