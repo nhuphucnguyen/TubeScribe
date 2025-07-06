@@ -20,6 +20,8 @@ TubeScribe is a web application that allows users to download YouTube videos to 
 
 ## Installation
 
+### Standard Installation
+
 1. Clone the repository:
    ```bash
    git clone https://github.com/yourusername/tubescribe.git
@@ -37,6 +39,26 @@ TubeScribe is a web application that allows users to download YouTube videos to 
    ```
 
 4. Open a web browser and navigate to:
+   ```
+   http://localhost:8000
+   ```
+
+### Docker Installation
+
+You can also run TubeScribe using Docker:
+
+1. Build and start the container using Docker Compose:
+   ```bash
+   docker-compose up -d
+   ```
+
+2. Or build and run the Docker container manually:
+   ```bash
+   docker build -t tubescribe .
+   docker run -p 8000:8000 -v $(pwd)/downloads:/app/downloads tubescribe
+   ```
+
+3. Open a web browser and navigate to:
    ```
    http://localhost:8000
    ```
@@ -67,6 +89,27 @@ If you encounter any issues:
 2. Check that the YouTube URL is valid and accessible
 3. Ensure you have sufficient disk space for downloads
 4. Some videos may be restricted and not available for download
+
+### Docker Troubleshooting
+
+1. If you have issues with permissions:
+   ```bash
+   # Reset permissions on the downloads directory
+   docker-compose down
+   sudo chown -R $(id -u):$(id -g) downloads
+   docker-compose up -d
+   ```
+
+2. To view logs:
+   ```bash
+   docker-compose logs -f
+   ```
+
+3. To rebuild the container after changes:
+   ```bash
+   docker-compose build --no-cache
+   docker-compose up -d
+   ```
 
 ## License
 

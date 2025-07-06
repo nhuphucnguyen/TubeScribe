@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  tubescribe:
+    build: .
+    container_name: tubescribe
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./downloads:/app/downloads
+    restart: unless-stopped
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+    # For development, you can uncomment these lines to mount the app code as a volume
+    # volumes:
+    #   - ./:/app
+    #   - ./downloads:/app/downloads
