@@ -55,6 +55,12 @@ def get_video_info(url: str) -> dict:
         'quiet': True,
         'no_warnings': True,
         'skip_download': True,
+        'format': 'bestvideo+bestaudio/best',  # Request all available formats
+        'youtube_include_dash_manifest': True,  # Include DASH manifests
+        'ignore_no_formats_error': True,
+        'extract_flat': False,
+        'check_formats': True,
+        'noplaylist': True,  # Only get info for the video, not the playlist
     }
     
     try:
@@ -100,17 +106,40 @@ async def download_video(download_id: str, url: str, format_id: str):
     # For special format selectors like 'best' or 'bestvideo+bestaudio'
     # we need to ensure the format string is correct
     format_string = format_id
+    postprocessor_args = {}
     
-    # If it's bestvideo+bestaudio, ensure we use the correct format string
-    # with the proper merge output format
+    # Configure different format selectors based on the user's choice
     if format_id == 'bestvideo+bestaudio':
+        # Get the best video and best audio and merge them
+        # This provides the highest quality possible
         format_string = 'bestvideo+bestaudio/best'
+    elif format_id == 'best':
+        # Get the best combined format (pre-merged)
+        format_string = 'best/bestvideo+bestaudio'
+    elif format_id == '4K':
+        # Specifically try to get 4K quality
+        format_string = 'bestvideo[height>=2160]+bestaudio/best[height>=2160]'
+    elif format_id == '1080p':
+        # Specifically try to get 1080p quality
+        format_string = 'bestvideo[height>=1080][height<2160]+bestaudio/best[height>=1080][height<2160]'
+    elif format_id == '720p':
+        # Specifically try to get 720p quality
+        format_string = 'bestvideo[height>=720][height<1080]+bestaudio/best[height>=720][height<1080]'
+    elif format_id == 'mp4':
+        # Specifically try to get mp4 format
+        format_string = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]'
+    elif format_id == 'webm':
+        # Specifically try to get webm format
+        format_string = 'bestvideo[ext=webm]+bestaudio[ext=webm]/best[ext=webm]'
     
     ydl_opts = {
         'format': format_string,
         'outtmpl': str(download_path / '%(title)s.%(ext)s'),
         'progress_hooks': [progress_hook],
         'merge_output_format': 'mp4',  # Force merge to mp4 for compatibility
+        'postprocessor_args': postprocessor_args,
+        'prefer_ffmpeg': True,
+        'noplaylist': True,  # Only download the video, not the playlist
     }
     
     # Run the CPU-intensive download operation in a separate thread pool
@@ -166,22 +195,64 @@ async def get_info(request: DownloadRequest):
     # Also include best available formats from format selector
     best_formats = []
     
-    # Add best format (highest resolution with audio and video)
-    best_formats.append({
-        'format_id': 'best',
-        'resolution': 'Best Quality',
-        'ext': 'mp4',
-        'filesize': 0,
-        'format_note': 'Best quality available (auto-selected)'
-    })
-    
-    # Add best video + best audio 
+    # Add best video + best audio (highest quality)
     best_formats.append({
         'format_id': 'bestvideo+bestaudio',
-        'resolution': 'Highest Resolution',
+        'resolution': 'Maximum Quality',
         'ext': 'mp4',
         'filesize': 0,
-        'format_note': 'Highest resolution available'
+        'format_note': 'Best video & audio quality available (largest file)'
+    })
+    
+    # Add specific resolution options
+    best_formats.append({
+        'format_id': '4K',
+        'resolution': '4K (2160p)',
+        'ext': 'mp4',
+        'filesize': 0,
+        'format_note': '4K quality (if available)'
+    })
+    
+    best_formats.append({
+        'format_id': '1080p',
+        'resolution': 'Full HD (1080p)',
+        'ext': 'mp4',
+        'filesize': 0,
+        'format_note': 'Full HD quality'
+    })
+    
+    best_formats.append({
+        'format_id': '720p',
+        'resolution': 'HD (720p)',
+        'ext': 'mp4',
+        'filesize': 0,
+        'format_note': 'HD quality (smaller file)'
+    })
+    
+    # Add specific format options
+    best_formats.append({
+        'format_id': 'mp4',
+        'resolution': 'Best MP4',
+        'ext': 'mp4',
+        'filesize': 0,
+        'format_note': 'Best quality in MP4 format'
+    })
+    
+    best_formats.append({
+        'format_id': 'webm',
+        'resolution': 'Best WebM',
+        'ext': 'webm',
+        'filesize': 0,
+        'format_note': 'Best quality in WebM format'
+    })
+    
+    # Add best format (balanced quality)
+    best_formats.append({
+        'format_id': 'best',
+        'resolution': 'Balanced Quality',
+        'ext': 'mp4',
+        'filesize': 0,
+        'format_note': 'Good balance of quality and file size'
     })
     
     # Filter specific formats for better presentation
